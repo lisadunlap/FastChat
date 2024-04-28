@@ -282,6 +282,7 @@ def get_ip(request: gr.Request):
 
 
 def _prepare_text_with_image(state, text, image):
+    print("image", image)
     if image is not None:
         if len(state.conv.get_images()) > 0:
             # reset convo with new image
@@ -296,35 +297,35 @@ def _prepare_text_with_image(state, text, image):
     return text
 
 
-def add_text(state, model_selector, text, image, request: gr.Request):
+def add_text(state, model_selector, text, request: gr.Request):
     ip = get_ip(request)
-    logger.info(f"add_text. ip: {ip}. len: {len(text)}")
+    logger.info(f"add_text. ip: {ip}. len: {len(text['text'])}")
 
     if state is None:
         state = State(model_selector)
 
-    if len(text) <= 0:
+    if len(text["text"]) <= 0:
         state.skip_next = True
         return (state, state.to_gradio_chatbot(), "", None) + (no_change_btn,) * 5
 
     all_conv_text = state.conv.get_prompt()
-    all_conv_text = all_conv_text[-2000:] + "\nuser: " + text
+    all_conv_text = all_conv_text[-2000:] + "\nuser: " + text["text"]
     flagged = moderation_filter(all_conv_text, [state.model_name])
     # flagged = moderation_filter(text, [state.model_name])
     if flagged:
-        logger.info(f"violate moderation. ip: {ip}. text: {text}")
+        logger.info(f"violate moderation. ip: {ip}. text: {text['text']}")
         # overwrite the original text
         text = MODERATION_MSG
 
     if (len(state.conv.messages) - state.conv.offset) // 2 >= CONVERSATION_TURN_LIMIT:
-        logger.info(f"conversation turn limit. ip: {ip}. text: {text}")
+        logger.info(f"conversation turn limit. ip: {ip}. text: {text['text']}")
         state.skip_next = True
         return (state, state.to_gradio_chatbot(), CONVERSATION_LIMIT_MSG, None) + (
             no_change_btn,
         ) * 5
 
-    text = text[:INPUT_CHAR_LEN_LIMIT]  # Hard cut-off
-    text = _prepare_text_with_image(state, text, image)
+    text_cutoff = text["text"][:INPUT_CHAR_LEN_LIMIT]  # Hard cut-off
+    text = _prepare_text_with_image(state, text_cutoff, text["files"][0])
     state.conv.append_message(state.conv.roles[0], text)
     state.conv.append_message(state.conv.roles[1], None)
     return (state, state.to_gradio_chatbot(), "", None) + (disable_btn,) * 5
@@ -696,6 +697,9 @@ We open-source our [FastChat](https://github.com/lm-sys/FastChat) project at Git
 ## Arena Core Team
 - [Lianmin Zheng](https://lmzheng.net/) (co-lead), [Wei-Lin Chiang](https://infwinston.github.io/) (co-lead), [Ying Sheng](https://sites.google.com/view/yingsheng/home), [Joseph E. Gonzalez](https://people.eecs.berkeley.edu/~jegonzal/), [Ion Stoica](http://people.eecs.berkeley.edu/~istoica/)
 
+## Arena Vision Team
+- [Lisa Dunlap](https://www.lisabdunlap.com/) (co-lead) and [Christopher Chou](https://chrischou.netlify.app/) (co-lead), [Wei-Lin Chiang](https://infwinston.github.io/), [Joseph E. Gonzalez](https://people.eecs.berkeley.edu/~jegonzal/)
+
 ## Past Members
 - [Siyuan Zhuang](https://scholar.google.com/citations?user=KSZmI5EAAAAJ), [Hao Zhang](https://cseweb.ucsd.edu/~haozhang/)
 
@@ -831,22 +835,22 @@ def build_single_model_ui(models, add_promotion_links=False):
         [textbox, upvote_btn, downvote_btn, flag_btn],
     )
     regenerate_btn.click(
-        regenerate, state, [state, chatbot, textbox, imagebox] + btn_list
+        regenerate, state, [state, chatbot, textbox] + btn_list
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],
         [state, chatbot] + btn_list,
     )
-    clear_btn.click(clear_history, None, [state, chatbot, textbox, imagebox] + btn_list)
+    clear_btn.click(clear_history, None, [state, chatbot, textbox] + btn_list)
 
     model_selector.change(
-        clear_history, None, [state, chatbot, textbox, imagebox] + btn_list
+        clear_history, None, [state, chatbot, textbox] + btn_list
     )
 
     textbox.submit(
         add_text,
-        [state, model_selector, textbox, imagebox],
-        [state, chatbot, textbox, imagebox] + btn_list,
+        [state, model_selector, textbox],
+        [state, chatbot, textbox] + btn_list,
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],
@@ -854,8 +858,8 @@ def build_single_model_ui(models, add_promotion_links=False):
     )
     send_btn.click(
         add_text,
-        [state, model_selector, textbox, imagebox],
-        [state, chatbot, textbox, imagebox] + btn_list,
+        [state, model_selector, textbox],
+        [state, chatbot, textbox] + btn_list,
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],

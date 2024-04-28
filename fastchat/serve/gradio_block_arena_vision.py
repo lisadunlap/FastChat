@@ -36,7 +36,7 @@ logger = build_logger("gradio_web_server_multi", "gradio_web_server_multi.log")
 def get_vqa_sample():
     random_sample = np.random.choice(vqa_samples)
     question, path = random_sample["question"], random_sample["path"]
-    return "", path
+    return {"files": [path], "text": question},
 
 
 def clear_history_example(request: gr.Request):
@@ -85,14 +85,21 @@ Note: You can only chat with **one image per conversation**. You can upload imag
 
     with gr.Row():
         with gr.Column(scale=3):
-            textbox = gr.Textbox(
-                show_label=False,
-                placeholder="👉 Enter your prompt and press ENTER",
-                container=False,
-                render=False,
-                elem_id="input_box",
-            )
-            imagebox = gr.Image(type="pil", sources=["upload", "clipboard"])
+            # textbox = gr.Textbox(
+            #     show_label=False,
+            #     placeholder="👉 Enter your prompt and press ENTER",
+            #     container=False,
+            #     render=False,
+            #     elem_id="input_box",
+            # )
+            textbox = gr.MultimodalTextbox(interactive=True, 
+                                              file_types=["image"], 
+                                              placeholder="👉 Enter your prompt, (optional upload/paste image) and press ENTER", 
+                                              show_label=False,
+                                              container=False,
+                                              render=False,
+                                              elem_id="input_box")
+            # imagebox = gr.Image(type="pil", sources=["upload", "clipboard"])
 
             cur_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -123,17 +130,22 @@ Note: You can only chat with **one image per conversation**. You can upload imag
                 )
 
             examples = gr.Examples(
+                # examples=[
+                #     [
+                #         f"{cur_dir}/example_images/fridge.jpg",
+                #         "How can I prepare a delicious meal using these ingredients?",
+                #     ],
+                #     [
+                #         f"{cur_dir}/example_images/distracted.jpg",
+                #         "What might the woman on the right be thinking about?",
+                #     ],
+                # ],
+                # inputs=[imagebox, textbox],
                 examples=[
-                    [
-                        f"{cur_dir}/example_images/fridge.jpg",
-                        "How can I prepare a delicious meal using these ingredients?",
-                    ],
-                    [
-                        f"{cur_dir}/example_images/distracted.jpg",
-                        "What might the woman on the right be thinking about?",
-                    ],
+                    {"files": [f"{cur_dir}/example_images/fridge.jpg"], "text": "How can I prepare a delicious meal using these ingredients?"},
+                    {"files": [f"{cur_dir}/example_images/distracted.jpg"], "text": "What might the woman on the right be thinking about?"},
                 ],
-                inputs=[imagebox, textbox],
+                inputs=[textbox],
             )
 
             if random_questions:
@@ -181,24 +193,24 @@ Note: You can only chat with **one image per conversation**. You can upload imag
         [textbox, upvote_btn, downvote_btn, flag_btn],
     )
     regenerate_btn.click(
-        regenerate, state, [state, chatbot, textbox, imagebox] + btn_list
+        regenerate, state, [state, chatbot, textbox] + btn_list
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],
         [state, chatbot] + btn_list,
     )
-    clear_btn.click(clear_history, None, [state, chatbot, textbox, imagebox] + btn_list)
+    clear_btn.click(clear_history, None, [state, chatbot, textbox] + btn_list)
 
     model_selector.change(
-        clear_history, None, [state, chatbot, textbox, imagebox] + btn_list
+        clear_history, None, [state, chatbot, textbox] + btn_list
     )
-    imagebox.upload(clear_history_example, None, [state, chatbot] + btn_list)
+    # imagebox.upload(clear_history_example, None, [state, chatbot] + btn_list)
     examples.dataset.click(clear_history_example, None, [state, chatbot] + btn_list)
 
     textbox.submit(
         add_text,
-        [state, model_selector, textbox, imagebox],
-        [state, chatbot, textbox, imagebox] + btn_list,
+        [state, model_selector, textbox],
+        [state, chatbot, textbox] + btn_list,
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],
@@ -206,8 +218,8 @@ Note: You can only chat with **one image per conversation**. You can upload imag
     )
     send_btn.click(
         add_text,
-        [state, model_selector, textbox, imagebox],
-        [state, chatbot, textbox, imagebox] + btn_list,
+        [state, model_selector, textbox],
+        [state, chatbot, textbox] + btn_list,
     ).then(
         bot_response,
         [state, temperature, top_p, max_output_tokens],
@@ -218,7 +230,7 @@ Note: You can only chat with **one image per conversation**. You can upload imag
         random_btn.click(
             get_vqa_sample,  # First, get the VQA sample
             [],  # Pass the path to the VQA samples
-            [textbox, imagebox],  # Outputs are textbox and imagebox
+            [textbox],  # Outputs are textbox and imagebox
         ).then(clear_history_example, None, [state, chatbot] + btn_list)
 
     return [state, model_selector]
